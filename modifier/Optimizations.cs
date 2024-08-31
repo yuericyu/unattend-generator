@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 
 namespace Schneegans.Unattend;
@@ -10,6 +9,11 @@ public record class EnabledProcessAuditSettings(
   bool IncludeCommandLine
 ) : IProcessAuditSettings;
 
+public enum HideModes
+{
+  None, HiddenSystem, Hidden
+}
+
 public class DisabledProcessAuditSettings : IProcessAuditSettings;
 
 class OptimizationsModifier(ModifierContext context) : Modifier(context)
@@ -18,50 +22,96 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
   {
     CommandAppender appender = GetAppender(CommandConfig.Specialize);
 
-    if (Configuration.DisableDefender)
     {
-      if (Configuration.DisableDefenderPE)
+      IEnumerable<string> SetExplorerOptions(string rootKey, string subKey)
       {
-        CommandAppender pe = GetAppender(CommandConfig.WindowsPE);
-        const string path = @"X:\disable-defender.cmd";
-        foreach (string line in Util.SplitLines(Util.StringFromResource("disable-defender-pe.cmd")))
+        if (Configuration.ShowFileExtensions)
         {
-          pe.Append(
-            CommandBuilder.WriteToFile(path, line)
-          );
+          yield return CommandBuilder.RegistryCommand(@$"add ""{rootKey}\{subKey}\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"" /v ""HideFileExt"" /t REG_DWORD /d 0 /f");
         }
-        pe.Append(
-          CommandBuilder.ShellCommand($"start /MIN {path}")
-        );
-      }
 
-      // https://lazyadmin.nl/win-11/turn-off-windows-defender-windows-11-permanently/
-      string filename = @"%TEMP%\disable-defender.ini";
-      StringWriter sw = new();
-      foreach (string service in (string[])[
-        "Sense",
-        "WdBoot",
-        "WdFilter",
-        "WdNisDrv",
-        "WdNisSvc",
-        "WinDefend",
-      ])
-      {
-        sw.WriteLine($"""
-          HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\{service}
-              "Start" = REG_DWORD 4
-          """);
+        switch (Configuration.HideFiles)
+        {
+          case HideModes.None:
+            yield return CommandBuilder.RegistryCommand(@$"add ""{rootKey}\{subKey}\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"" /v ""Hidden"" /t REG_DWORD /d 1 /f");
+            yield return CommandBuilder.RegistryCommand(@$"add ""{rootKey}\{subKey}\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"" /v ""ShowSuperHidden"" /t REG_DWORD /d 1 /f");
+            break;
+          case HideModes.HiddenSystem:
+            yield return CommandBuilder.RegistryCommand(@$"add ""{rootKey}\{subKey}\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"" /v ""Hidden"" /t REG_DWORD /d 1 /f");
+            break;
+          case HideModes.Hidden:
+            break;
+        }
       }
-      AddTextFile(sw.ToString(), filename);
+      appender.Append(CommandBuilder.RegistryDefaultUserCommand(SetExplorerOptions));
+    }
+
+    if (Configuration.ShowAllTrayIcons)
+    {
+      string ps1File = @"C:\Windows\Setup\Scripts\ShowAllTrayIcons.ps1";
+      string script = Util.StringFromResource("ShowAllTrayIcons.ps1");
+      AddTextFile(script, ps1File);
       appender.Append(
-        CommandBuilder.Raw(@$"regini.exe ""{filename}""")
+        CommandBuilder.InvokePowerShellScript(ps1File)
       );
     }
 
-    if(Configuration.DisableSac)
+    if (Configuration.DeleteTaskbarIcons)
+    {
+      string ps1File = @"C:\Windows\Setup\Scripts\DeleteTaskbarIcons.ps1";
+      string script = Util.StringFromResource("DeleteTaskbarIcons.ps1");
+      AddTextFile(script, ps1File);
+      appender.Append(
+        CommandBuilder.InvokePowerShellScript(ps1File)
+      );
+    }
+
+    if (Configuration.DisableDefender)
+    {
+      CommandAppender pe = GetAppender(CommandConfig.WindowsPE);
+      const string path = @"X:\disable-defender.vbs";
+      foreach (string line in Util.SplitLines(Util.StringFromResource("disable-defender.vbs")))
+      {
+        pe.Append(
+          CommandBuilder.WriteToFile(path, line)
+        );
+      }
+      pe.Append(
+        CommandBuilder.ShellCommand($"start /MIN cscript.exe //E:vbscript {path}")
+      );
+    }
+
+    if (Configuration.DisableSac)
     {
       appender.Append(
         CommandBuilder.RegistryCommand(@"add ""HKLM\SYSTEM\CurrentControlSet\Control\CI\Policy"" /v VerifiedAndReputablePolicyState /t REG_DWORD /d 0 /f")
+      );
+    }
+
+    if (Configuration.DisableSmartScreen)
+    {
+      appender.Append([
+        CommandBuilder.RegistryCommand(@"add ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer"" /v SmartScreenEnabled /t REG_SZ /d ""Off"" /f"),
+        CommandBuilder.RegistryCommand(@"add ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WTDS\Components"" /v ServiceEnabled /t REG_DWORD /d 0 /f"),
+        CommandBuilder.RegistryCommand(@"add ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WTDS\Components"" /v NotifyMalicious /t REG_DWORD /d 0 /f"),
+        CommandBuilder.RegistryCommand(@"add ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WTDS\Components"" /v NotifyPasswordReuse /t REG_DWORD /d 0 /f"),
+        CommandBuilder.RegistryCommand(@"add ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WTDS\Components"" /v NotifyUnsafeApp /t REG_DWORD /d 0 /f"),
+        ..CommandBuilder.RegistryDefaultUserCommand((rootKey, subKey) =>
+        {
+          return [
+            CommandBuilder.RegistryCommand(@$"add ""{rootKey}\{subKey}\Software\Microsoft\Edge\SmartScreenEnabled"" /ve /t REG_DWORD /d 0 /f"),
+            CommandBuilder.RegistryCommand(@$"add ""{rootKey}\{subKey}\Software\Microsoft\Edge\SmartScreenPuaEnabled"" /ve /t REG_DWORD /d 0 /f"),
+            CommandBuilder.RegistryCommand(@$"add ""{rootKey}\{subKey}\Software\Microsoft\Windows\CurrentVersion\AppHost"" /v EnableWebContentEvaluation /t REG_DWORD /d 0 /f"),
+            CommandBuilder.RegistryCommand(@$"add ""{rootKey}\{subKey}\Software\Microsoft\Windows\CurrentVersion\AppHost"" /v PreventOverride /t REG_DWORD /d 0 /f"),
+          ];
+        })
+      ]);
+    }
+
+    if (Configuration.DisableUac)
+    {
+      appender.Append(
+        CommandBuilder.RegistryCommand(@"add ""HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"" /v EnableLUA /t REG_DWORD /d 0 /f")
       );
     }
 
@@ -124,6 +174,13 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
       ]);
     }
 
+    if (Configuration.DisableFastStartup)
+    {
+      appender.Append(
+        CommandBuilder.RegistryCommand(@"add ""HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power"" /v HiberbootEnabled /t REG_DWORD /d 0 /f")
+      );
+    }
+
     if (Configuration.DisableSystemRestore)
     {
       CommandAppender oobe = GetAppender(CommandConfig.Oobe);
@@ -149,7 +206,7 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
           AddTextFile(script, ps1File);
           return [
             CommandBuilder.InvokePowerShellScript(ps1File),
-            CommandBuilder.UserRunOnceCommand("NoSounds", @"C:\Windows\System32\reg.exe add ""HKCU\AppEvents\Schemes"" /ve /t REG_SZ /d "".None"" /f", rootKey, subKey),
+            CommandBuilder.UserRunOnceCommand(rootKey, subKey, "NoSounds", CommandBuilder.RegistryCommand(@"add ""HKCU\AppEvents\Schemes"" /ve /t REG_SZ /d "".None"" /f")),
           ];
         }));
       appender.Append([
@@ -236,8 +293,25 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
       appender.Append(
         CommandBuilder.RegistryDefaultUserCommand((rootKey, subKey) =>
         {
-          return [CommandBuilder.UserRunOnceCommand("ClassicContextMenu", CommandBuilder.RegistryCommand(@$"add ""HKCU\Software\Classes\CLSID\{{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}}\InprocServer32"" /ve /f"), rootKey, subKey)];
+          return [CommandBuilder.UserRunOnceCommand(rootKey, subKey, "ClassicContextMenu", CommandBuilder.RegistryCommand(@$"add ""HKCU\Software\Classes\CLSID\{{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}}\InprocServer32"" /ve /f"))];
         })
+      );
+    }
+
+    if (Configuration.LeftTaskbar)
+    {
+      appender.Append(
+        CommandBuilder.RegistryDefaultUserCommand((rootKey, subKey) =>
+        {
+          return [CommandBuilder.RegistryCommand(@$"add ""{rootKey}\{subKey}\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"" /v TaskbarAl /t REG_DWORD /d 0 /f")];
+        })
+      );
+    }
+
+    if (Configuration.HideEdgeFre)
+    {
+      appender.Append(
+        CommandBuilder.RegistryCommand(@"add ""HKLM\SOFTWARE\Policies\Microsoft\Edge"" /v HideFirstRunExperience /t REG_DWORD /d 1 /f")
       );
     }
   }

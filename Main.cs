@@ -150,14 +150,24 @@ static class CommandBuilder
     return $"reg.exe {value}";
   }
 
-  public static string UserRunOnceCommand(string name, string value, string rootKey, string subKey)
+  public static string UserRunOnceCommand(string rootKey, string subKey, string name, string command)
+  {
+    return UserRunCommand(rootKey, subKey, "RunOnce", name, command);
+  }
+
+  public static string RunAtLogonCommand(string rootKey, string subKey, string name, string command)
+  {
+    return UserRunCommand(rootKey, subKey, "Run", name, command);
+  }
+
+  private static string UserRunCommand(string rootKey, string subKey, string runKey, string name, string command)
   {
     static string Escape(string s)
     {
       return s.Replace(@"""", @"\""");
     }
 
-    return RegistryCommand(@$"add ""{rootKey}\{subKey}\Software\Microsoft\Windows\CurrentVersion\Runonce"" /v ""{Escape(name)}"" /t REG_SZ /d ""{Escape(value)}"" /f");
+    return RegistryCommand(@$"add ""{rootKey}\{subKey}\Software\Microsoft\Windows\CurrentVersion\{runKey}"" /v ""{Escape(name)}"" /t REG_SZ /d ""{Escape(command)}"" /f");
   }
 
   public delegate IEnumerable<string> RegistryDefaultUserAction(string rootKey, string subKey);
@@ -166,11 +176,21 @@ static class CommandBuilder
   {
     string rootKey = "HKU";
     string subKey = "DefaultUser";
-    return [
-      RegistryCommand(@$"load ""{rootKey}\{subKey}"" ""C:\Users\Default\NTUSER.DAT"""),
-      .. action.Invoke(rootKey, subKey),
-      RegistryCommand(@$"unload ""{rootKey}\{subKey}"""),
-    ];
+
+    IEnumerable<string> content = action.Invoke(rootKey, subKey);
+
+    if (content.Any())
+    {
+      return [
+        RegistryCommand(@$"load ""{rootKey}\{subKey}"" ""C:\Users\Default\NTUSER.DAT"""),
+        .. content,
+        RegistryCommand(@$"unload ""{rootKey}\{subKey}"""),
+      ];
+    }
+    else
+    {
+      return [];
+    }
   }
 
   public static string PowerShellCommand(string value)
@@ -263,9 +283,11 @@ public record class Configuration(
   bool DisableLastAccess,
   bool NoAutoRebootWithLoggedOnUsers,
   bool DisableDefender,
-  bool DisableDefenderPE,
   bool DisableSac,
+  bool DisableUac,
+  bool DisableSmartScreen,
   bool DisableSystemRestore,
+  bool DisableFastStartup,
   bool TurnOffSystemSounds,
   bool DisableAppSuggestions,
   bool DisableWidgets,
@@ -273,7 +295,13 @@ public record class Configuration(
   bool VMwareTools,
   bool VirtIoGuestTools,
   bool PreventDeviceEncryption,
-  bool ClassicContextMenu
+  bool ClassicContextMenu,
+  bool LeftTaskbar,
+  bool DeleteTaskbarIcons,
+  bool ShowFileExtensions,
+  bool ShowAllTrayIcons,
+  HideModes HideFiles,
+  bool HideEdgeFre
 )
 {
   public static Configuration Default => new(
@@ -302,8 +330,10 @@ public record class Configuration(
     DisableLastAccess: false,
     NoAutoRebootWithLoggedOnUsers: false,
     DisableDefender: false,
-    DisableDefenderPE: false,
     DisableSac: false,
+    DisableUac: false,
+    DisableSmartScreen: false,
+    DisableFastStartup: false,
     DisableSystemRestore: false,
     TurnOffSystemSounds: false,
     DisableAppSuggestions: false,
@@ -312,7 +342,13 @@ public record class Configuration(
     VMwareTools: false,
     VirtIoGuestTools: false,
     PreventDeviceEncryption: false,
-    ClassicContextMenu: false
+    ClassicContextMenu: false,
+    LeftTaskbar: false,
+    DeleteTaskbarIcons: false,
+    ShowFileExtensions: false,
+    ShowAllTrayIcons: false,
+    HideFiles: HideModes.Hidden,
+    HideEdgeFre: false
   );
 }
 

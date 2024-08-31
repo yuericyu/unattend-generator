@@ -61,7 +61,13 @@
         "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
         "Selector": "Microsoft.Windows.Notepad",
         "AppliesTo": [
-          "Windows 10",
+          "Windows 10"
+        ]
+      },
+      {
+        "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
+        "Selector": "Microsoft.Windows.Notepad.System",
+        "AppliesTo": [
           "Windows 11"
         ]
       }
@@ -706,6 +712,18 @@
         "Selector": "Microsoft.BingSearch",
         "AppliesTo": [
           "Windows 11 24H2"
+        ]
+      }
+    ]
+  },
+  {
+    "DisplayName": "Mixed Reality",
+    "Steps": [
+      {
+        "$type": "Schneegans.Unattend.PackageBloatwareStep, UnattendGenerator",
+        "Selector": "Microsoft.MixedReality.Portal",
+        "AppliesTo": [
+          "Windows 10"
         ]
       }
     ]

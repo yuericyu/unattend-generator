@@ -9,22 +9,28 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="resource\DeleteTaskbarIcons.ps1" />
+    <None Remove="resource\disable-defender.vbs" />
     <None Remove="resource\RemoveBloatware.ps1" />
     <None Remove="resource\RemoveCapabilities.ps1" />
     <None Remove="resource\RemoveFeatures.ps1" />
     <None Remove="resource\RemovePackages.ps1" />
+    <None Remove="resource\ShowAllTrayIcons.ps1" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="resource\autounattend.xml" />
     <EmbeddedResource Include="resource\autounattend.xsd" />
     <EmbeddedResource Include="resource\Component.json" />
+    <EmbeddedResource Include="resource\disable-defender.vbs" />
     <EmbeddedResource Include="resource\ExtractScripts.ps1" />
     <EmbeddedResource Include="resource\GeoId.json" />
     <EmbeddedResource Include="resource\ImageLanguage.json" />
     <EmbeddedResource Include="resource\KeyboardIdentifier.json" />
     <EmbeddedResource Include="resource\Bloatware.json" />
     <EmbeddedResource Include="resource\known-writeable-folders.txt" />
+    <EmbeddedResource Include="resource\DeleteTaskbarIcons.ps1" />
+    <EmbeddedResource Include="resource\ShowAllTrayIcons.ps1" />
     <EmbeddedResource Include="resource\RemoveBloatware.ps1" />
     <EmbeddedResource Include="resource\TimeOffset.json" />
     <EmbeddedResource Include="resource\TurnOffSystemSounds.ps1" />
@@ -35,7 +41,6 @@
     <EmbeddedResource Include="resource\WindowsEdition.json" />
     <EmbeddedResource Include="resource\WLANProfile.xml" />
     <EmbeddedResource Include="resource\WLAN_profile_v1.xsd" />
-    <EmbeddedResource Include="resource\disable-defender-pe.cmd" />
   </ItemGroup>
 
   <ItemGroup>
