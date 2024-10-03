@@ -1,8 +1,10 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Xml;
 
 namespace Schneegans.Unattend;
 
@@ -52,6 +54,26 @@ public record class SolidWallpaperSettings(
   Color Color
 ) : IWallpaperSettings;
 
+public interface IStartPinsSettings;
+
+public class DefaultStartPinsSettings : IStartPinsSettings;
+
+public class EmptyStartPinsSettings : IStartPinsSettings;
+
+public record class CustomStartPinsSettings(
+  string Json
+) : IStartPinsSettings;
+
+public interface IStartTilesSettings;
+
+public class DefaultStartTilesSettings : IStartTilesSettings;
+
+public class EmptyStartTilesSettings : IStartTilesSettings;
+
+public record class CustomStartTilesSettings(
+  string Xml
+) : IStartTilesSettings;
+
 class OptimizationsModifier(ModifierContext context) : Modifier(context)
 {
   public override void Process()
@@ -96,11 +118,14 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
 
     if (Configuration.DeleteTaskbarIcons)
     {
-      string ps1File = @"C:\Windows\Setup\Scripts\DeleteTaskbarIcons.ps1";
-      string script = Util.StringFromResource("DeleteTaskbarIcons.ps1");
+      string ps1File = @"C:\Windows\Setup\Scripts\TaskbarIcons.ps1";
+      string script = Util.StringFromResource("TaskbarIcons.ps1");
       AddTextFile(script, ps1File);
       appender.Append(
-        CommandBuilder.InvokePowerShellScript(ps1File)
+        CommandBuilder.RegistryDefaultUserCommand((rootKey, subKey) =>
+        {
+          return [CommandBuilder.UserRunOnceCommand(rootKey, subKey, "TaskbarIcons", CommandBuilder.InvokePowerShellScript(ps1File))];
+        })
       );
     }
 
@@ -464,6 +489,81 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
           ];
         })
       );
+    }
+    {
+      void SetStartPins(string json)
+      {
+        string ps1File = @"C:\Windows\Setup\Scripts\SetStartPins.ps1";
+        string script = Util.StringFromResource("SetStartPins.ps1");
+        StringWriter writer = new();
+        writer.WriteLine($"$json = '{json.Replace("'", "''")}';");
+        writer.WriteLine(script);
+        AddTextFile(writer.ToString(), ps1File);
+        appender.Append(
+          CommandBuilder.InvokePowerShellScript(ps1File)
+        );
+      }
+
+      switch (Configuration.StartPinsSettings)
+      {
+        case DefaultStartPinsSettings:
+          break;
+
+        case EmptyStartPinsSettings:
+          SetStartPins(@"{""pinnedList"":[]}");
+          break;
+
+        case CustomStartPinsSettings settings:
+          try
+          {
+            using JsonTextReader reader = new(new StringReader(settings.Json));
+            while (reader.Read()) { }
+          }
+          catch
+          {
+            throw new ConfigurationException($"The string '{settings.Json}' is not valid JSON.");
+          }
+          SetStartPins(settings.Json.Trim());
+          break;
+
+        default:
+          throw new NotSupportedException();
+      }
+    }
+    {
+      void SetStartTiles(string xml)
+      {
+        XmlDocument doc = new();
+        doc.LoadXml(xml);
+        AddXmlFile(doc, @"C:\Users\Default\AppData\Local\Microsoft\Windows\Shell\LayoutModification.xml");
+      }
+
+      switch (Configuration.StartTilesSettings)
+      {
+        case DefaultStartTilesSettings:
+          break;
+
+        case EmptyStartTilesSettings:
+          string xml = """
+          <LayoutModificationTemplate Version='1' xmlns='http://schemas.microsoft.com/Start/2014/LayoutModification'>
+            <LayoutOptions StartTileGroupCellWidth='6' />
+            <DefaultLayoutOverride>
+              <StartLayoutCollection>
+                <StartLayout GroupCellWidth='6' xmlns='http://schemas.microsoft.com/Start/2014/FullDefaultLayout' />
+              </StartLayoutCollection>
+            </DefaultLayoutOverride>
+          </LayoutModificationTemplate>
+          """;
+          SetStartTiles(xml);
+          break;
+
+        case CustomStartTilesSettings settings:
+          SetStartTiles(settings.Xml);
+          break;
+
+        default:
+          throw new NotSupportedException();
+      }
     }
   }
 }
