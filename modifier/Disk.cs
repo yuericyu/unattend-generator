@@ -33,15 +33,34 @@ public record class UnattendedPartitionSettings(
   int RecoverySize = Constants.RecoveryPartitionSize
 ) : IPartitionSettings;
 
+public enum CompactOsModes
+{
+  Default, Always, Never
+}
+
 class DiskModifier(ModifierContext context) : Modifier(context)
 {
   public override void Process()
   {
+    var target = Document.SelectSingleNodeOrThrow("//u:Compact", NamespaceManager);
+    switch (Configuration.CompactOsMode)
+    {
+      case CompactOsModes.Default:
+        target.RemoveSelf();
+        break;
+      case CompactOsModes.Always:
+        target.InnerText = "true";
+        break;
+      case CompactOsModes.Never:
+        target.InnerText = "false";
+        break;
+    }
+
     switch (Configuration.PartitionSettings)
     {
       case InteractivePartitionSettings:
         {
-          Document.SelectSingleNodeOrThrow("//u:ImageInstall", NamespaceManager).RemoveSelf();
+          Document.SelectSingleNodeOrThrow("//u:InstallTo", NamespaceManager).RemoveSelf();
           break;
         }
       case UnattendedPartitionSettings settings:
