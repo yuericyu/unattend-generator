@@ -283,6 +283,7 @@ public record class Configuration(
   ScriptSettings ScriptSettings,
   IKeySettings KeySettings,
   IWallpaperSettings WallpaperSettings,
+  IColorSettings ColorSettings,
   bool BypassRequirementsCheck,
   bool BypassNetworkCheck,
   bool EnableLongPaths,
@@ -320,7 +321,7 @@ public record class Configuration(
 {
   public static Configuration Default => new(
     LanguageSettings: new InteractiveLanguageSettings(),
-    AccountSettings: new InteractiveAccountSettings(),
+    AccountSettings: new InteractiveMicrosoftAccountSettings(),
     PartitionSettings: new InteractivePartitionSettings(),
     EditionSettings: new InteractiveEditionSettings(),
     LockoutSettings: new DefaultLockoutSettings(),
@@ -337,6 +338,7 @@ public record class Configuration(
     ScriptSettings: new ScriptSettings([]),
     KeySettings: new SkipKeySettings(),
     WallpaperSettings: new DefaultWallpaperSettings(),
+    ColorSettings: new DefaultColorSettings(),
     BypassRequirementsCheck: false,
     BypassNetworkCheck: false,
     EnableLongPaths: false,
@@ -797,6 +799,7 @@ public class UnattendGenerator
       new LockoutModifier(context),
       new PasswordExpirationModifier(context),
       new OptimizationsModifier(context),
+      new PersonalizationModifier(context),
       new ComponentsModifier(context),
       new ComputerNameModifier(context),
       new TimeZoneModifier(context),
