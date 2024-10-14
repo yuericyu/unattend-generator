@@ -3,7 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 
@@ -157,26 +159,6 @@ static class CommandBuilder
     return $"reg.exe {value}";
   }
 
-  public static string UserRunOnceCommand(string rootKey, string subKey, string name, string command)
-  {
-    return UserRunCommand(rootKey, subKey, "RunOnce", name, command);
-  }
-
-  public static string RunAtLogonCommand(string rootKey, string subKey, string name, string command)
-  {
-    return UserRunCommand(rootKey, subKey, "Run", name, command);
-  }
-
-  private static string UserRunCommand(string rootKey, string subKey, string runKey, string name, string command)
-  {
-    static string Escape(string s)
-    {
-      return s.Replace(@"""", @"\""");
-    }
-
-    return RegistryCommand(@$"add ""{rootKey}\{subKey}\Software\Microsoft\Windows\CurrentVersion\{runKey}"" /v ""{Escape(name)}"" /t REG_SZ /d ""{Escape(command)}"" /f");
-  }
-
   public delegate IEnumerable<string> RegistryDefaultUserAction(string rootKey, string subKey);
 
   public static IEnumerable<string> RegistryDefaultUserCommand(RegistryDefaultUserAction action)
@@ -308,11 +290,13 @@ public record class Configuration(
   bool ClassicContextMenu,
   bool LeftTaskbar,
   bool DeleteTaskbarIcons,
+  bool HideTaskViewButton,
   bool ShowFileExtensions,
   bool ShowAllTrayIcons,
   HideModes HideFiles,
   bool HideEdgeFre,
   bool MakeEdgeUninstallable,
+  bool LaunchToThisPC,
   TaskbarSearchMode TaskbarSearch,
   IStartPinsSettings StartPinsSettings,
   IStartTilesSettings StartTilesSettings,
@@ -363,16 +347,60 @@ public record class Configuration(
     ClassicContextMenu: false,
     LeftTaskbar: false,
     DeleteTaskbarIcons: false,
+    HideTaskViewButton: false,
     ShowFileExtensions: false,
     ShowAllTrayIcons: false,
     HideFiles: HideModes.Hidden,
     HideEdgeFre: false,
     MakeEdgeUninstallable: false,
+    LaunchToThisPC: false,
     TaskbarSearch: TaskbarSearchMode.Box,
     StartPinsSettings: new DefaultStartPinsSettings(),
     StartTilesSettings: new DefaultStartTilesSettings(),
     CompactOsMode: CompactOsModes.Default
   );
+}
+
+/// <summary>
+/// Collects PowerShell commands that will be run whenever a user logs on for the first time.
+/// </summary>
+public class UserOnceScript
+{
+  private bool needsExplorerRestart = false;
+  private readonly List<string> commands = [];
+
+  public void Append(string command)
+  {
+    commands.Add(command);
+  }
+
+  public void InvokeFile(string file)
+  {
+    Append($"Get-Content -LiteralPath '{file}' -Raw | Invoke-Expression;");
+  }
+
+  public void RestartExplorer()
+  {
+    needsExplorerRestart = true;
+  }
+
+  public string GetScript()
+  {
+    IEnumerable<string> Lines()
+    {
+      yield return "& {";
+      foreach (string command in commands)
+      {
+        yield return command;
+      }
+      if (needsExplorerRestart)
+      {
+        yield return Util.StringFromResource("RestartExplorer.ps1");
+      }
+      yield return @"} *>&1 >> ""$env:TEMP\UserOnce.log"";";
+    }
+    return string.Join("\r\n", Lines());
+  }
 }
 
 public interface IKeyed
@@ -783,10 +811,12 @@ public class UnattendGenerator
       Configuration: config,
       Document: doc,
       NamespaceManager: ns,
-      Generator: this
+      Generator: this,
+      UserOnceScript: new UserOnceScript()
     );
 
     new List<Modifier> {
+      new ComputerNameModifier(context),
       new DiskModifier(context),
       new BypassModifier(context),
       new ProductKeyModifier(context),
@@ -801,10 +831,10 @@ public class UnattendGenerator
       new OptimizationsModifier(context),
       new PersonalizationModifier(context),
       new ComponentsModifier(context),
-      new ComputerNameModifier(context),
       new TimeZoneModifier(context),
       new WdacModifier(context),
       new ScriptModifier(context),
+      new UserOnceModifier(context),
       new OrderModifier(context),
       new ProcessorArchitectureModifier(context),
       new PrettyModifier(context),
@@ -818,9 +848,32 @@ public class UnattendGenerator
     return doc;
   }
 
-  public byte[] GenerateBytes(Configuration config)
+  /// <summary>
+  /// Serializes an <c>autounattend.xml</c> document such that it can be reliably processed. Windows Setup expects 
+  /// the document to have an <c>encoding="utf-8"</c> encoding declaration, but actually only supports ASCII characters.
+  /// </summary>
+  public static byte[] Serialize(XmlDocument doc)
   {
-    return Util.ToPrettyBytes(GenerateXml(config));
+    using var mstr = new MemoryStream();
+    {
+      using StreamWriter sw = new(mstr, encoding: Encoding.ASCII, leaveOpen: true);
+      sw.Write(@"<?xml version=""1.0"" encoding=""utf-8""?>" + "\r\n");
+      sw.Close();
+    }
+    {
+      using var writer = XmlWriter.Create(mstr, new XmlWriterSettings()
+      {
+        Encoding = Encoding.ASCII,
+        OmitXmlDeclaration = true,
+        CloseOutput = true,
+        Indent = true,
+        IndentChars = "\t",
+        NewLineChars = "\r\n",
+      });
+      doc.Save(writer);
+      writer.Close();
+    }
+    return mstr.ToArray();
   }
 }
 
@@ -828,7 +881,8 @@ public record class ModifierContext(
   XmlDocument Document,
   XmlNamespaceManager NamespaceManager,
   Configuration Configuration,
-  UnattendGenerator Generator
+  UnattendGenerator Generator,
+  UserOnceScript UserOnceScript
 );
 
 abstract class Modifier(ModifierContext context)
@@ -840,6 +894,8 @@ abstract class Modifier(ModifierContext context)
   public Configuration Configuration { get; } = context.Configuration;
 
   public UnattendGenerator Generator { get; } = context.Generator;
+
+  public UserOnceScript UserOnceScript { get; } = context.UserOnceScript;
 
   public XmlElement NewSimpleElement(string name, XmlElement parent, string innerText)
   {
@@ -860,15 +916,31 @@ abstract class Modifier(ModifierContext context)
 
   public void AddXmlFile(XmlDocument xml, string path)
   {
-    AddFile(Util.ToPrettyString(xml), useCDataSection: true, path);
+    string ToPrettyString()
+    {
+      using var sw = new StringWriter();
+      using var writer = XmlWriter.Create(sw, new XmlWriterSettings()
+      {
+        CloseOutput = true,
+        OmitXmlDeclaration = true,
+        Indent = true,
+        IndentChars = "\t",
+        NewLineChars = "\r\n",
+      });
+      xml.Save(writer);
+      writer.Close();
+      return sw.ToString();
+    }
+
+    AddFile(ToPrettyString(), path);
   }
 
   public void AddTextFile(string content, string path)
   {
-    AddFile(content, useCDataSection: false, path);
+    AddFile(content, path);
   }
 
-  private void AddFile(string content, bool useCDataSection, string path)
+  private void AddFile(string content, string path)
   {
     {
       XmlNode root = Document.SelectSingleNodeOrThrow("/u:unattend", NamespaceManager);
@@ -897,15 +969,7 @@ abstract class Modifier(ModifierContext context)
       XmlElement file = Document.CreateElement("File", Constants.MyNamespaceUri);
       file.SetAttribute("path", path);
       extensions.AppendChild(file);
-
-      if (useCDataSection)
-      {
-        file.AppendChild(Document.CreateCDataSection(Util.Indent(content)));
-      }
-      else
-      {
-        file.AppendChild(Document.CreateTextNode(Util.Indent(content)));
-      }
+      file.AppendChild(Document.CreateTextNode(Util.Indent(content)));
     }
   }
 }
