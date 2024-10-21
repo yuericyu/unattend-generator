@@ -41,6 +41,19 @@
     ]
   },
   {
+    "DisplayName": "Media Features",
+    "Steps": [
+      {
+        "$type": "Schneegans.Unattend.OptionalFeatureBloatwareStep, UnattendGenerator",
+        "Selector": "MediaPlayback",
+        "AppliesTo": [
+          "Windows 10",
+          "Windows 11"
+        ]
+      }
+    ]
+  },
+  {
     "DisplayName": "WordPad",
     "Steps": [
       {
@@ -769,6 +782,46 @@
         "Selector": "Microsoft.Wallet",
         "AppliesTo": [
           "Windows 10"
+        ]
+      }
+    ]
+  },
+  {
+    "DisplayName": "Windows Hello",
+    "Steps": [
+      {
+        "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
+        "Selector": "Hello.Face.18967",
+        "AppliesTo": [
+          "Windows 10"
+        ]
+      },
+      {
+        "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
+        "Selector": "Hello.Face.Migration.18967",
+        "AppliesTo": [
+          "Windows 10"
+        ]
+      },
+      {
+        "$type": "Schneegans.Unattend.CapabilityBloatwareStep, UnattendGenerator",
+        "Selector": "Hello.Face.20134",
+        "AppliesTo": [
+          "Windows 11"
+        ]
+      }
+    ]
+  },
+  {
+    "DisplayName": "PowerShell 2.0",
+    "Token": "PowerShell2",
+    "Steps": [
+      {
+        "$type": "Schneegans.Unattend.OptionalFeatureBloatwareStep, UnattendGenerator",
+        "Selector": "MicrosoftWindowsPowerShellV2Root",
+        "AppliesTo": [
+          "Windows 10",
+          "Windows 11"
         ]
       }
     ]
