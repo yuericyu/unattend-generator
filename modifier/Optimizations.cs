@@ -95,6 +95,21 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
       appender.Append(CommandBuilder.RegistryDefaultUserCommand(SetExplorerOptions));
     }
 
+    if(Configuration.DisableWindowsUpdate)
+    {
+      AddTextFile(
+        Util.StringFromResource("PauseWindowsUpdate.ps1"),
+        @"C:\Windows\Setup\Scripts\PauseWindowsUpdate.ps1"
+      );
+      AddXmlFile(
+        Util.XmlDocumentFromResource("PauseWindowsUpdate.xml"),
+        @"C:\Windows\Setup\Scripts\PauseWindowsUpdate.xml"
+      );
+      appender.Append(
+        CommandBuilder.PowerShellCommand(@"Register-ScheduledTask -TaskName 'PauseWindowsUpdate' -Xml $( Get-Content -LiteralPath 'C:\Windows\Setup\Scripts\PauseWindowsUpdate.xml' -Raw );")
+      );
+    }
+
     if (Configuration.ShowAllTrayIcons)
     {
       string ps1File = @"C:\Windows\Setup\Scripts\ShowAllTrayIcons.ps1";
@@ -328,10 +343,10 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
 
     if (Configuration.VMwareTools)
     {
-      string ps1File = @"%TEMP%\VMwareTools.ps1";
+      string ps1File = @"C:\Windows\Setup\Scripts\VMwareTools.ps1";
       string script = Util.StringFromResource("VMwareTools.ps1");
       AddTextFile(script, ps1File);
-      appender.Append(
+      (Configuration.DisableDefender ? GetAppender(CommandConfig.Specialize) : GetAppender(CommandConfig.Oobe)).Append(
         CommandBuilder.InvokePowerShellScript(ps1File)
       );
     }
