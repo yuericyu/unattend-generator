@@ -338,6 +338,8 @@ public record class Configuration(
   bool LaunchToThisPC,
   bool DisableWindowsUpdate,
   bool DisablePointerPrecision,
+  bool DisableBingResults,
+  bool UseConfigurationSet,
   TaskbarSearchMode TaskbarSearch,
   IStartPinsSettings StartPinsSettings,
   IStartTilesSettings StartTilesSettings,
@@ -397,6 +399,8 @@ public record class Configuration(
     LaunchToThisPC: false,
     DisableWindowsUpdate: false,
     DisablePointerPrecision: false,
+    DisableBingResults: false,
+    UseConfigurationSet: false,
     TaskbarSearch: TaskbarSearchMode.Box,
     StartPinsSettings: new DefaultStartPinsSettings(),
     StartTilesSettings: new DefaultStartTilesSettings(),
@@ -1081,9 +1085,27 @@ abstract class Modifier(ModifierContext context)
     AddFile(ToPrettyString(), path, ContentTransformation.Text);
   }
 
-  public void AddTextFile(string content, string path)
+  public string AddXmlFile(string resourceName)
   {
-    AddFile(content, path, ContentTransformation.Text);
+    string path = $@"C:\Windows\Setup\Scripts\{resourceName}";
+    AddXmlFile(Util.XmlDocumentFromResource(resourceName), path);
+    return path;
+  }
+
+  public string AddTextFile(string name, string content, Action<StringWriter>? before = null, Action<StringWriter>? after = null)
+  {
+    string destination = $@"C:\Windows\Setup\Scripts\{name}";
+    StringWriter writer = new();
+    before?.Invoke(writer);
+    writer.WriteLine(content);
+    after?.Invoke(writer);
+    AddFile(writer.ToString(), destination, ContentTransformation.Text);
+    return destination;
+  }
+
+  public string AddTextFile(string resourceName, Action<StringWriter>? before = null, Action<StringWriter>? after = null)
+  {
+    return AddTextFile(resourceName, content: Util.StringFromResource(resourceName), before: before, after: after);
   }
 
   public void AddBinaryFile(byte[] content, string path)
