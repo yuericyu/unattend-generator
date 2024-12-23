@@ -1,16 +1,13 @@
 ﻿<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
 	<Triggers>
-		<LogonTrigger>
-			<Repetition>
-				<Interval>PT1M</Interval>
-				<StopAtDurationEnd>false</StopAtDurationEnd>
-			</Repetition>
+		<EventTrigger>
 			<Enabled>true</Enabled>
-		</LogonTrigger>
+			<Subscription>&lt;QueryList&gt;&lt;Query Id="0" Path="Application"&gt;&lt;Select Path="Application"&gt;*[System[Provider[@Name='UnattendGenerator'] and EventID=1]]&lt;/Select&gt;&lt;/Query&gt;&lt;/QueryList&gt;</Subscription>
+		</EventTrigger>
 	</Triggers>
 	<Principals>
 		<Principal id="Author">
-			<GroupId>S-1-5-32-545</GroupId>
+			<UserId>S-1-5-18</UserId>
 			<RunLevel>LeastPrivilege</RunLevel>
 		</Principal>
 	</Principals>
@@ -36,7 +33,7 @@
 	<Actions Context="Author">
 		<Exec>
 			<Command>C:\Windows\System32\wscript.exe</Command>
-			<Arguments>C:\Windows\Setup\Scripts\ShowAllTrayIcons.vbs</Arguments>
+			<Arguments>C:\Windows\Setup\Scripts\UnlockStartLayout.vbs</Arguments>
 		</Exec>
 	</Actions>
 </Task>

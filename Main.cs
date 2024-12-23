@@ -337,6 +337,7 @@ public record class Configuration(
   bool LaunchToThisPC,
   bool DisableWindowsUpdate,
   bool DisablePointerPrecision,
+  bool DeleteWindowsOld,
   bool DisableBingResults,
   bool UseConfigurationSet,
   TaskbarSearchMode TaskbarSearch,
@@ -398,6 +399,7 @@ public record class Configuration(
     LaunchToThisPC: false,
     DisableWindowsUpdate: false,
     DisablePointerPrecision: false,
+    DeleteWindowsOld: false,
     DisableBingResults: false,
     UseConfigurationSet: false,
     TaskbarSearch: TaskbarSearchMode.Box,
@@ -1083,6 +1085,15 @@ abstract class Modifier(ModifierContext context)
     }
 
     AddFile(ToPrettyString(), path, ContentTransformation.Text);
+  }
+
+  public string AddXmlFile(string xml, string name)
+  {
+    string path = $@"C:\Windows\Setup\Scripts\{name}";
+    var doc = new XmlDocument();
+    doc.LoadXml(xml);
+    AddXmlFile(doc, path);
+    return path;
   }
 
   public string AddXmlFile(string resourceName)
