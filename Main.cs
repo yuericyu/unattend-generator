@@ -344,7 +344,8 @@ public record class Configuration(
   IStartPinsSettings StartPinsSettings,
   IStartTilesSettings StartTilesSettings,
   CompactOsModes CompactOsMode,
-  ITaskbarIcons TaskbarIcons
+  ITaskbarIcons TaskbarIcons,
+  IEffects Effects
 )
 {
   public static Configuration Default => new(
@@ -406,7 +407,8 @@ public record class Configuration(
     StartPinsSettings: new DefaultStartPinsSettings(),
     StartTilesSettings: new DefaultStartTilesSettings(),
     CompactOsMode: CompactOsModes.Default,
-    TaskbarIcons: new DefaultTaskbarIcons()
+    TaskbarIcons: new DefaultTaskbarIcons(),
+    Effects: new DefaultEffects()
   );
 }
 
@@ -1084,7 +1086,7 @@ abstract class Modifier(ModifierContext context)
       return sw.ToString();
     }
 
-    AddFile(ToPrettyString(), path, ContentTransformation.Text);
+    AddFile(ToPrettyString(), path);
   }
 
   public string AddXmlFile(string xml, string name)
@@ -1110,7 +1112,7 @@ abstract class Modifier(ModifierContext context)
     before?.Invoke(writer);
     writer.WriteLine(content);
     after?.Invoke(writer);
-    AddFile(writer.ToString(), destination, ContentTransformation.Text);
+    AddFile(writer.ToString(), destination);
     return destination;
   }
 
@@ -1118,19 +1120,8 @@ abstract class Modifier(ModifierContext context)
   {
     return AddTextFile(resourceName, content: Util.StringFromResource(resourceName), before: before, after: after);
   }
-
-  public void AddBinaryFile(byte[] content, string path)
-  {
-    AddFile(Convert.ToBase64String(content, Base64FormattingOptions.InsertLineBreaks), path, ContentTransformation.Base64);
-  }
-
-  private enum ContentTransformation
-  {
-    Text,
-    Base64
-  }
-
-  private void AddFile(string content, string path, ContentTransformation transformation)
+    
+  private void AddFile(string content, string path)
   {
     {
       XmlNode root = Document.SelectSingleNodeOrThrow("/u:unattend", NamespaceManager);
@@ -1158,7 +1149,6 @@ abstract class Modifier(ModifierContext context)
 
       XmlElement file = Document.CreateElement("File", Constants.MyNamespaceUri);
       file.SetAttribute("path", path);
-      file.SetAttribute("transformation", transformation.ToString());
       extensions.AppendChild(file);
       file.AppendChild(Document.CreateTextNode(Util.Indent(content)));
     }
