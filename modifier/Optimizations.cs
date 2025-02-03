@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Text;
@@ -112,9 +113,15 @@ public interface IDesktopIconSettings;
 
 public record class DefaultDesktopIconSettings : IDesktopIconSettings;
 
-public record class CustomDesktopIconSettings(
-  ImmutableDictionary<DesktopIcon, bool> Settings
-) : IDesktopIconSettings;
+public record class CustomDesktopIconSettings : IDesktopIconSettings
+{
+  public CustomDesktopIconSettings(IDictionary<DesktopIcon, bool> settings)
+  {
+    Settings = ImmutableSortedDictionary.CreateRange(settings);
+  }
+
+  public ImmutableSortedDictionary<DesktopIcon, bool> Settings { get; init; }
+}
 
 class OptimizationsModifier(ModifierContext context) : Modifier(context)
 {
@@ -222,6 +229,9 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
         ..CommandBuilder.WriteToFile(path, Util.SplitLines(Util.StringFromResource("DisableDefender.vbs"))),
         CommandBuilder.ShellCommand($"start /MIN cscript.exe //E:vbscript {path}")
       ]);
+      SpecializeScript.Append("""
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Notifications" /v DisableNotifications /t REG_DWORD /d 1 /f;
+        """);
     }
 
     if (Configuration.UseConfigurationSet)
@@ -242,6 +252,7 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
         reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WTDS\Components" /v NotifyMalicious /t REG_DWORD /d 0 /f;
         reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WTDS\Components" /v NotifyPasswordReuse /t REG_DWORD /d 0 /f;
         reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WTDS\Components" /v NotifyUnsafeApp /t REG_DWORD /d 0 /f;
+        reg.exe add "HKLM\SOFTWARE\Policies\Microsoft\Windows Defender Security Center\Systray" /v HideSystray /t REG_DWORD /d 1 /f;
         """);
       DefaultUserScript.Append("""
         reg.exe add "HKU\DefaultUser\Software\Microsoft\Edge\SmartScreenEnabled" /ve /t REG_DWORD /d 0 /f;
