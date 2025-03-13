@@ -508,6 +508,7 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
       if (Configuration.TaskbarSearch != TaskbarSearchMode.Box)
       {
         UserOnceScript.Append(@$"Set-ItemProperty -LiteralPath 'Registry::HKCU\Software\Microsoft\Windows\CurrentVersion\Search' -Name 'SearchboxTaskbarMode' -Type 'DWord' -Value {Configuration.TaskbarSearch:D};");
+        UserOnceScript.RestartExplorer();
       }
     }
     {
@@ -673,6 +674,14 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
           break;
         default:
           throw new NotSupportedException();
+      }
+    }
+    {
+      if(Configuration.ShowEndTask)
+      {
+        DefaultUserScript.Append("""
+          reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings" /v TaskbarEndTask /t REG_DWORD /d 1 /f;
+          """);
       }
     }
   }
