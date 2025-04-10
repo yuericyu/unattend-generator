@@ -126,7 +126,12 @@ public class Account
       Throw();
     }
 
-    if (Name.IndexOfAny(['/', '\\', '[', ']', ':', ';', '|', '=', ',', '+', '*', '?', '<', '>']) > -1)
+    if (Name.IndexOfAny(['/', '\\', '[', ']', ':', ';', '|', '=', ',', '+', '*', '?', '<', '>', '"', '%']) > -1)
+    {
+      Throw();
+    }
+
+    if( Name.EndsWith('.'))
     {
       Throw();
     }
@@ -139,7 +144,8 @@ public class Account
         "system",
         "network service",
         "local service",
-        "none"
+        "none",
+        "wdagutilityaccount"
       ];
 
       if (existing.Contains(Name, StringComparer.OrdinalIgnoreCase))
