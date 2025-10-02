@@ -64,12 +64,6 @@ public record class ScriptPESetttings(
   string Script
 ) : ICmdPESettings;
 
-record class ImageSpec(
-  string Key,
-  string Value,
-  bool PrependOsVersion
-);
-
 static class Paths
 {
   static internal readonly string PEScript = @"X:\pe.cmd";
@@ -204,42 +198,31 @@ class DiskModifier(ModifierContext context) : Modifier(context)
             diskpart.exe /s {Paths.DiskpartScript} || ( echo diskpart.exe encountered an error. & pause & exit /b 1 )
             """);
 
-          ImageSpec GetImageSpec()
+          string GetIndexOrName()
           {
+            if (Configuration.InstallFromSettings is IndexInstallFromSettings indexSettings)
             {
-              if (Configuration.InstallFromSettings is IndexInstallFromSettings settings)
-              {
-                return new("Index", settings.Value, false);
-              }
+              return $"/Index:{indexSettings.Index}";
             }
+            if (Configuration.InstallFromSettings is NameInstallFromSettings nameSettings)
             {
-              if (Configuration.InstallFromSettings is NameInstallFromSettings settings)
-              {
-                return new("Name", settings.Value, false);
-              }
+              return $@"/Name:""{nameSettings.Name}""";
             }
+            if (Configuration.EditionSettings is UnattendedEditionSettings editionSettings)
             {
-              if (Configuration.EditionSettings is UnattendedEditionSettings settings)
-              {
-                return new("Name", settings.Edition.DisplayName, true);
-              }
+              writer.WriteLine("""
+              set "OS_VERSION=Windows 11"
+              for /f "tokens=3 delims=." %%v in ('ver') do (
+                  if %%v LSS 20000 set "OS_VERSION=Windows 10"
+              )
+              """);
+              return $@"/Name:""%OS_VERSION% {editionSettings.Edition.DisplayName}""";
             }
             throw new ConfigurationException("Cannot determine which Windows image to apply. Specify image name or index in the ‘Source image’ section.");
           }
 
-          var image = GetImageSpec();
-          if (image.PrependOsVersion)
-          {
-            writer.WriteLine("""
-              set "OS_VERSION=Windows 11 "
-              for /f "tokens=3 delims=." %%v in ('ver') do (
-                  if %%v LSS 20000 set "OS_VERSION=Windows 10 "
-              )
-              """);
-          }
-
           writer.WriteLine($"""
-            dism.exe /Apply-Image /ImageFile:%IMAGE_FILE% %SWM_PARAM% /{image.Key}:"%OS_VERSION%{image.Value}" /ApplyDir:{windowsDrive}:\ {(Configuration.CompactOsMode == CompactOsModes.Always ? "/Compact" : "")} || ( echo dism.exe encountered an error. & pause & exit /b 1 )
+            dism.exe /Apply-Image /ImageFile:%IMAGE_FILE% %SWM_PARAM% {GetIndexOrName()} /ApplyDir:{windowsDrive}:\ {(Configuration.CompactOsMode == CompactOsModes.Always ? "/Compact" : "")} || ( echo dism.exe encountered an error. & pause & exit /b 1 )
             bcdboot.exe {windowsDrive}:\Windows /s {bootDrive}: || ( echo bcdboot.exe encountered an error. & pause & exit /b 1 )
             """);
 
@@ -498,57 +481,50 @@ class DiskModifier(ModifierContext context) : Modifier(context)
 
   internal static List<string> GetDiskpartScript(UnattendedPartitionSettings settings, char bootDrive = 'S', char windowsDrive = 'W', char recoveryDrive = 'R')
   {
-    List<string> lines = [];
-
-    void AddIf(string item, bool condition = true)
+    string IfRecovery(string line)
     {
-      if (condition)
-      {
-        lines.Add(item);
-      }
+      return settings.RecoveryMode == RecoveryMode.Partition ? line : "";
     }
 
-    bool recoveryPartition = settings.RecoveryMode == RecoveryMode.Partition;
-
-    switch (settings.PartitionLayout)
+    return settings.PartitionLayout switch
     {
-      case PartitionLayout.MBR:
-        AddIf("SELECT DISK=0");
-        AddIf("CLEAN");
-        AddIf("CREATE PARTITION PRIMARY SIZE=100");
-        AddIf(@"FORMAT QUICK FS=NTFS LABEL=""System Reserved""");
-        AddIf($"ASSIGN LETTER={bootDrive}");
-        AddIf("ACTIVE");
-        AddIf("CREATE PARTITION PRIMARY");
-        AddIf($"SHRINK MINIMUM={settings.RecoverySize}", recoveryPartition);
-        AddIf(@"FORMAT QUICK FS=NTFS LABEL=""Windows""");
-        AddIf($"ASSIGN LETTER={windowsDrive}");
-        AddIf("CREATE PARTITION PRIMARY", recoveryPartition);
-        AddIf(@"FORMAT QUICK FS=NTFS LABEL=""Recovery""", recoveryPartition);
-        AddIf($"ASSIGN LETTER={recoveryDrive}", recoveryPartition);
-        AddIf("SET ID=27", recoveryPartition);
-        break;
-
-      case PartitionLayout.GPT:
-        AddIf("SELECT DISK=0");
-        AddIf("CLEAN");
-        AddIf("CONVERT GPT");
-        AddIf($"CREATE PARTITION EFI SIZE={settings.EspSize}");
-        AddIf(@"FORMAT QUICK FS=FAT32 LABEL=""System""");
-        AddIf($"ASSIGN LETTER={bootDrive}");
-        AddIf("CREATE PARTITION MSR SIZE=16");
-        AddIf("CREATE PARTITION PRIMARY");
-        AddIf($"SHRINK MINIMUM={settings.RecoverySize}", recoveryPartition);
-        AddIf(@"FORMAT QUICK FS=NTFS LABEL=""Windows""");
-        AddIf($"ASSIGN LETTER={windowsDrive}");
-        AddIf("CREATE PARTITION PRIMARY", recoveryPartition);
-        AddIf(@"FORMAT QUICK FS=NTFS LABEL=""Recovery""", recoveryPartition);
-        AddIf($"ASSIGN LETTER={recoveryDrive}", recoveryPartition);
-        AddIf(@"SET ID=""de94bba4-06d1-4d40-a16a-bfd50179d6ac""", recoveryPartition);
-        AddIf("GPT ATTRIBUTES=0x8000000000000001", recoveryPartition);
-        break;
-    }
-
-    return lines;
+      PartitionLayout.MBR =>
+      [
+        "SELECT DISK=0",
+        "CLEAN",
+        "CREATE PARTITION PRIMARY SIZE=100",
+        @"FORMAT QUICK FS=NTFS LABEL=""System Reserved""",
+        $"ASSIGN LETTER={bootDrive}",
+        "ACTIVE",
+        "CREATE PARTITION PRIMARY",
+        (IfRecovery($"SHRINK MINIMUM={settings.RecoverySize}")),
+        @"FORMAT QUICK FS=NTFS LABEL=""Windows""",
+        $"ASSIGN LETTER={windowsDrive}",
+        (IfRecovery("CREATE PARTITION PRIMARY")),
+        (IfRecovery(@"FORMAT QUICK FS=NTFS LABEL=""Recovery""")),
+        (IfRecovery($"ASSIGN LETTER={recoveryDrive}")),
+        (IfRecovery("SET ID=27"))
+      ],
+      PartitionLayout.GPT =>
+      [
+        "SELECT DISK=0",
+        "CLEAN",
+        "CONVERT GPT",
+        $"CREATE PARTITION EFI SIZE={settings.EspSize}",
+        @"FORMAT QUICK FS=FAT32 LABEL=""System""",
+        $"ASSIGN LETTER={bootDrive}",
+        "CREATE PARTITION MSR SIZE=16",
+        "CREATE PARTITION PRIMARY",
+        (IfRecovery($"SHRINK MINIMUM={settings.RecoverySize}")),
+        @"FORMAT QUICK FS=NTFS LABEL=""Windows""",
+        $"ASSIGN LETTER={windowsDrive}",
+        (IfRecovery("CREATE PARTITION PRIMARY")),
+        (IfRecovery(@"FORMAT QUICK FS=NTFS LABEL=""Recovery""")),
+        (IfRecovery($"ASSIGN LETTER={recoveryDrive}")),
+        (IfRecovery(@"SET ID=""de94bba4-06d1-4d40-a16a-bfd50179d6ac""")),
+        (IfRecovery("GPT ATTRIBUTES=0x8000000000000001"))
+      ],
+      _ => throw new NotSupportedException()
+    };
   }
 }
