@@ -133,6 +133,7 @@ class DiskModifier(ModifierContext context) : Modifier(context)
                 if exist %%d:\$OEM$ set "OEM_FOLDER=%%d:\$OEM$"
                 if exist %%d:\$WinPEDriver$ set "PEDRIVERS_FOLDER=%%d:\$WinPEDriver$"
             )
+            for /f "tokens=3" %%t in ('reg.exe query HKLM\System\Setup /v UnattendFile') do ( if exist %%t set "XML_FILE=%%t" )
             @if not defined IMAGE_FILE echo Could not locate install.wim, install.esd or install.swm. & pause & exit /b 1
             @if not defined XML_FILE echo Could not locate autounattend.xml. & pause & exit /b 1
             """);
@@ -295,6 +296,18 @@ class DiskModifier(ModifierContext context) : Modifier(context)
               for %%s in (Sense WdBoot WdFilter WdNisDrv WdNisSvc WinDefend) do reg.exe ADD HKLM\mount\ControlSet001\Services\%%s /v Start /t REG_DWORD /d 4 /f
               reg.exe UNLOAD HKLM\mount
               """);
+          }
+
+          {
+            if (Configuration.LanguageSettings is UnattendedLanguageSettings settings)
+            {
+              writer.WriteLine($"""
+              rem Set device setup region
+              reg.exe LOAD HKLM\mount {windowsDrive}:\Windows\System32\config\SOFTWARE
+              reg.exe ADD "HKLM\mount\Microsoft\Windows\CurrentVersion\Control Panel\DeviceRegion" /v DeviceRegion /t REG_DWORD /d {settings.GeoLocation.Id} /f
+              reg.exe UNLOAD HKLM\mount
+              """);
+            }
           }
 
           if (Configuration.UseConfigurationSet)
