@@ -13,7 +13,6 @@
     <None Remove="resource\DesktopIcon.json" />
     <None Remove="resource\DisableDefender.vbs" />
     <None Remove="resource\MakeEdgeUninstallable.ps1" />
-    <None Remove="resource\MoveActiveHours.vbs" />
     <None Remove="resource\MoveActiveHours.xml" />
     <None Remove="resource\PauseWindowsUpdate.ps1" />
     <None Remove="resource\PauseWindowsUpdate.xml" />
@@ -26,7 +25,6 @@
     <None Remove="resource\SetComputerName.ps1" />
     <None Remove="resource\SetStartPins.ps1" />
     <None Remove="resource\ShowAllTrayIcons.ps1" />
-    <None Remove="resource\ShowAllTrayIcons.vbs" />
     <None Remove="resource\ShowAllTrayIcons.xml" />
   </ItemGroup>
 
@@ -50,12 +48,10 @@
     <EmbeddedResource Include="resource\SetComputerName.ps1" />
     <EmbeddedResource Include="resource\SetColorTheme.ps1" />
     <EmbeddedResource Include="resource\PauseWindowsUpdate.ps1" />
-    <EmbeddedResource Include="resource\MoveActiveHours.vbs" />
     <EmbeddedResource Include="resource\SetWallpaper.ps1" />
     <EmbeddedResource Include="resource\MakeEdgeUninstallable.ps1" />
     <EmbeddedResource Include="resource\SetStartPins.ps1" />
     <EmbeddedResource Include="resource\UnlockStartLayout.vbs" />
-    <EmbeddedResource Include="resource\ShowAllTrayIcons.vbs" />
     <EmbeddedResource Include="resource\ShowAllTrayIcons.ps1" />
     <EmbeddedResource Include="resource\RemoveBloatware.ps1" />
     <EmbeddedResource Include="resource\ShowAllTrayIcons.xml" />
