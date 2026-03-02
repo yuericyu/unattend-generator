@@ -843,5 +843,21 @@ class OptimizationsModifier(ModifierContext context) : Modifier(context)
           """);
       }
     }
+    {
+      if(Configuration.HideInfoTip)
+      {
+        DefaultUserScript.Append("""
+          reg.exe add "HKU\DefaultUser\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v "ShowInfoTip" /d 0 /t REG_DWORD /f;
+          """);
+      }
+    }
+    {
+      if(Configuration.DisableWpbt)
+      {
+        SpecializeScript.Append("""
+          reg.exe add "HKLM\System\CurrentControlSet\Control\Session Manager" /v "DisableWpbtExecution" /t REG_DWORD /d 1 /f;
+          """);
+      }
+    }
   }
 }
