@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text.RegularExpressions;
+using System.Xml;
 
 namespace Schneegans.Unattend;
 
@@ -54,18 +55,38 @@ class ProductKeyModifier(ModifierContext context) : Modifier(context)
   public override void Process()
   {
     {
-      const string zero = "00000-00000-00000-00000-00000";
-      (string key, string ui) = Configuration.EditionSettings switch
-      {
-        UnattendedEditionSettings settings => (settings.Edition.ProductKey, "OnError"),
-        CustomEditionSettings settings => (settings.ProductKey, "OnError"),
-        InteractiveEditionSettings => (zero, "Always"),
-        FirmwareEditionSettings => (zero, "OnError"),
-        _ => throw new NotSupportedException()
-      };
+      XmlNode keyElement = Document.SelectSingleNodeOrThrow("//u:UserData/u:ProductKey/u:Key", NamespaceManager);
+      XmlNode uiElement = Document.SelectSingleNodeOrThrow("//u:UserData/u:ProductKey/u:WillShowUI", NamespaceManager);
 
-      Document.SelectSingleNodeOrThrow("//u:UserData/u:ProductKey/u:Key", NamespaceManager).InnerText = key;
-      Document.SelectSingleNodeOrThrow("//u:UserData/u:ProductKey/u:WillShowUI", NamespaceManager).InnerText = ui;
+      void SetWithoutKey(string ui)
+      {
+        keyElement.RemoveSelf();
+        uiElement.InnerText = ui;
+      }
+
+      void Set(string key, string ui)
+      {
+        keyElement.InnerText = key;
+        uiElement.InnerText = ui;
+      }
+
+      switch (Configuration.EditionSettings)
+      {
+        case UnattendedEditionSettings settings:
+          Set(settings.Edition.ProductKey, "OnError");
+          break;
+        case CustomEditionSettings settings:
+          Set(settings.ProductKey, "OnError");
+          break;
+        case InteractiveEditionSettings:
+          Set("00000-00000-00000-00000-00000", "Always");
+          break;
+        case FirmwareEditionSettings:
+          SetWithoutKey("Never");
+          break;
+        default:
+          throw new NotSupportedException();
+      }
     }
     {
       if (Configuration.EditionSettings is CustomEditionSettings settings)
