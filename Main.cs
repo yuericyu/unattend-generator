@@ -911,6 +911,7 @@ public static class Constants
         PauseBeforeFormatting: false,
         PauseBeforeReboot: false,
         CompactOs: false,
+        SkipIntegrityCheck: false,
         DisableDefender: true,
         PartitionSettings: partitionSettings,
         DiskAssertionSettings: assertionSettings,
